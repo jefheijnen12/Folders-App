@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="nl">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#1769aa">
+<title>Folders APP</title>
+<style>
+:root{--blue:#1769aa;--pale:#eaf3fb;--ink:#17212b;--line:#d6dee7;--bg:#f4f7fa}
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;background:var(--bg);color:var(--ink)}
+header{background:var(--blue);color:white;padding:17px 16px;font-size:21px;font-weight:700;position:sticky;top:0;z-index:2}
+main{max-width:680px;margin:auto;padding:14px 14px 92px}.card{background:#fff;border:1px solid var(--line);border-radius:14px;padding:15px;margin:0 0 12px;box-shadow:0 2px 5px #1020300b}
+h2{font-size:19px;margin:4px 0 12px}h3{font-size:16px;margin:0 0 9px}
+label{display:block;font-size:14px;font-weight:700;margin:10px 0 5px}input,select,button{font:inherit}input,select{width:100%;padding:12px;border:1px solid #b9c7d5;border-radius:9px;background:white;color:var(--ink)}
+button{border:0;border-radius:10px;padding:12px 14px;background:var(--blue);color:white;font-weight:700;cursor:pointer;margin:4px 3px 4px 0}button.secondary{background:#e8edf2;color:#182633}button.danger{background:#b83232}button.green{background:#18764a}button:disabled{opacity:.45}
+.actions{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}.nav{position:fixed;bottom:0;left:0;right:0;background:#fff;border-top:1px solid var(--line);display:flex;justify-content:space-around;padding:7px 3px calc(7px + env(safe-area-inset-bottom));z-index:3}.nav button{background:transparent;color:#34495a;font-size:12px;padding:7px 5px;margin:0;flex:1}.nav button.active{color:var(--blue);background:var(--pale)}
+.address{display:flex;align-items:center;gap:10px;border:1px solid var(--line);border-radius:11px;padding:12px;margin:8px 0;background:#fff}.address .adr{flex:1;font-weight:700;overflow-wrap:anywhere}.address .sub{font-size:12px;color:#687887;margin-top:4px}.address button{padding:8px 10px;font-size:13px}.black{color:#111}.blue{color:#1265c7}.muted{color:#687887;font-size:13px}.hidden{display:none!important}.modal{position:fixed;inset:0;background:#0008;display:flex;align-items:center;justify-content:center;padding:18px;z-index:10}.modalbox{background:white;border-radius:16px;padding:19px;width:100%;max-width:440px;max-height:90vh;overflow:auto}.bigaddr{font-size:25px;font-weight:800;margin:18px 0;overflow-wrap:anywhere}.pill{display:inline-block;background:var(--pale);color:var(--blue);padding:5px 9px;border-radius:20px;font-size:12px;font-weight:700}.empty{color:#738292;text-align:center;padding:18px 6px}.notice{background:#fff7db;border:1px solid #efdc8e;border-radius:10px;padding:10px;font-size:13px}
+</style>
+</head>
+<body>
+<header>📬 Folders APP</header>
+<main id="app"></main>
+<nav class="nav hidden" id="nav">
+<button data-page="routes">🗺️<br>Routes</button>
+<button data-page="delivery">🚶<br>Bezorgen</button>
+<button data-page="done">✅<br>Voltooid</button>
+<button data-page="settings">⚙️<br>Beheer</button>
+</nav>
+<div id="modalroot"></div>
+<script>
+(() => {
+const KEY='foldersAppDataV3';
+const defaultStreets=['Kerkveld','Bertus Aafjesstraat','Molenstraat','Bosweg','Lambertusstraat','Schoolstraat','Jan van Swolgenstraat','Broekhuizerweg','Kanakker','Hubertusstraat','Mgr Aertsstraat','Pastoorswal','Hoekweg','Vlasweg'];
+let db=load(), currentUser=null, page='routes', activeRoute='Loop route', run=null;
+function load(){try{
+ let saved=JSON.parse(localStorage.getItem(KEY));
+ if(saved)return saved;
+ // Migrate data from any earlier version keys when the new file is opened.
+ for (const oldKey of ['foldersAppDataV1','foldersAppDataV2','foldersAppDataV3']) {
+   let old=JSON.parse(localStorage.getItem(oldKey));
+   if(old && old.users && old.routes) {
+     old.streets=defaultStreets;
+     localStorage.setItem(KEY,JSON.stringify(old));
+     return old;
+   }
+ }
+ return null
+ }catch(e){return null}}
+function save(){localStorage.setItem(KEY,JSON.stringify(db))}
+function esc(s){return String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]))}
+function el(id){return document.getElementById(id)}
+function render(){if(!db){setup();return} if(!currentUser){login();return} el('nav').classList.remove('hidden');el('nav').querySelectorAll('button').forEach(b=>b.classList.toggle('active',b.dataset.page===page));({routes:routesPage,delivery:deliveryPage,done:donePage,settings:settingsPage}[page]||routesPage)()}
+function setup(){el('nav').classList.add('hidden');el('app').innerHTML=`<section class="card"><h2>Welkom bij Folders APP</h2><p>Maak een hoofdaccount aan. Deze pincode gebruik je ook om personen en pincodes te beheren.</p><label>Naam hoofdaccount</label><input id="setupName" placeholder="Bijv. mijn naam" autocomplete="name"><label>Hoofdpincode (4 cijfers)</label><input id="setupPin" inputmode="numeric" maxlength="4" type="password" placeholder="4 cijfers"><div class="actions"><button onclick="createAdmin()">App instellen</button></div><p class="muted">Je gegevens worden lokaal op deze telefoon opgeslagen.</p></section>`}
+window.createAdmin=()=>{let name=el('setupName').value.trim(),pin=el('setupPin').value;if(!name||!/^\d{4}$/.test(pin)){alert('Vul een naam en precies 4 cijfers in.');return}db={adminPin:pin,users:[{name,pin,admin:true}],streets:defaultStreets,routes:{'Loop route':[],'Fiets route':[]},history:[]};save();render()}
+function login(){el('nav').classList.add('hidden');el('app').innerHTML=`<section class="card"><h2>Inloggen</h2><label>Kies je naam</label><select id="loginName">${db.users.map((u,i)=>`<option value="${i}">${esc(u.name)}</option>`).join('')}</select><label>4-cijferige pincode</label><input id="loginPin" inputmode="numeric" maxlength="4" type="password" placeholder="••••"><button style="width:100%;margin-top:14px" onclick="doLogin()">Inloggen</button></section>`}
+window.doLogin=()=>{let u=db.users[+el('loginName').value];if(u&&el('loginPin').value===u.pin){currentUser=u.name;render()}else alert('Naam of pincode klopt niet.')}
+el('nav').addEventListener('click',e=>{let b=e.target.closest('button[data-page]');if(b){page=b.dataset.page;render()}});
+function routesPage(){el('app').innerHTML=`<section class="card"><h2>Routes</h2><p>Kies een route om adressen te bekijken en de bezorgvolgorde aan te passen.</p><div class="actions"><button onclick="setRoute('Loop route')">Loop route (${db.routes['Loop route'].length})</button><button onclick="setRoute('Fiets route')">Fiets route (${db.routes['Fiets route'].length})</button></div></section><section class="card"><h2>${activeRoute}</h2><p class="muted">Nieuwe adressen komen bovenaan. Het oudste toegevoegde adres blijft daardoor onderaan staan.</p><button onclick="addAddress()">＋ Voeg adres toe</button><div id="addressList">${addressList(activeRoute)}</div><div class="actions"><button class="green" onclick="startDelivery()">▶ Start bezorgen</button></div></section>`}
+window.setRoute=r=>{activeRoute=r;page='routes';render()}
+function addressList(r){let arr=db.routes[r];if(!arr.length)return '<div class="empty">Nog geen adressen toegevoegd.</div>';return arr.map((a,i)=>`<div class="address"><div class="adr ${a.color==='Blauw'?'blue':'black'}"><div>${esc(a.street)} ${esc(a.number)}</div><div class="sub">${i+1} van ${arr.length}</div></div><button class="secondary" onclick="moveAddr('${r}',${i},-1)" ${i===0?'disabled':''}>↑</button><button class="secondary" onclick="moveAddr('${r}',${i},1)" ${i===arr.length-1?'disabled':''}>↓</button><button class="danger" onclick="deleteAddr('${r}',${i})">✕</button></div>`).join('')}
+let lastChosenStreet = db.streets[0];
+window.addAddress=()=>showModal(`<h2>Adres toevoegen – ${esc(activeRoute)}</h2><label>Straat</label><select id="mStreet" onchange="rememberStreet()">${db.streets.map(s=>`<option ${s===lastChosenStreet?'selected':''}>${esc(s)}</option>`).join('')}</select><label>Huisnummer (eventueel toevoeging)</label><input id="mNumber" placeholder="Bijv. 12 of 12A"><label>Kleur adres</label><select id="mColor"><option>Zwart</option><option>Blauw</option></select><div class="actions"><button onclick="saveAddress()">Opslaan</button><button class="secondary" onclick="closeModal()">Annuleren</button></div>`);
+window.rememberStreet=()=>{lastChosenStreet=el('mStreet').value};
+window.saveAddress=()=>{let street=el('mStreet').value,number=el('mNumber').value.trim(),color=el('mColor').value;lastChosenStreet=street;if(!number){alert('Vul een huisnummer in.');return}db.routes[activeRoute].push({street,number,color});save();closeModal();render()}
+window.moveAddr=(r,i,d)=>{let a=db.routes[r],j=i+d;if(j<0||j>=a.length)return;[a[i],a[j]]=[a[j],a[i]];save();render()}
+window.deleteAddr=(r,i)=>{if(confirm('Dit adres verwijderen uit de route?')){db.routes[r].splice(i,1);save();render()}}
+function startDelivery(){let arr=db.routes[activeRoute];if(!arr.length){alert('Voeg eerst adressen toe aan deze route.');return}run={route:activeRoute,items:arr.map(a=>({...a})),index:0};page='delivery';showCurrent()}
+window.startDelivery=startDelivery;
+function showCurrent(){let a=run.items[run.index];showModal(`<span class="pill">${esc(run.route)} · adres ${run.index+1} van ${run.items.length}</span><div class="bigaddr ${a.color==='Blauw'?'blue':'black'}">${esc(a.street)} ${esc(a.number)}</div><p>Ben je klaar met dit adres?</p><div class="actions"><button class="green" onclick="completeCurrent()">✓ Klaar</button><button class="secondary" onclick="closeModal()">Sluiten</button></div>`)}
+window.completeCurrent=()=>{run.index++;if(run.index<run.items.length)showCurrent();else showModal(`<h2>🎉 Route klaar!</h2><p>Je hebt alle adressen van ${esc(run.route)} afgewerkt.</p><label>Datum of titel van deze bezorgronde</label><input id="roundTitle" placeholder="Bijv. 16 oktober 2026"><div class="actions"><button class="green" onclick="saveRound()">Sla bezorgronde op</button></div>`)}
+window.saveRound=()=>{let title=el('roundTitle').value.trim();if(!title){alert('Vul een datum of titel in.');return}db.history.unshift({title,route:run.route,items:run.items.map(a=>({...a})),completedAt:new Date().toISOString()});db.routes[run.route]=[];save();run=null;closeModal();page='done';render();alert('Bezorgronde opgeslagen. De gekozen route is leeggemaakt voor de volgende ronde.')}
+function deliveryPage(){el('app').innerHTML=`<section class="card"><h2>Tijdens bezorgen</h2><p>Kies een route en tik op <b>Start bezorgen</b>. Het eerste adres staat bovenaan de lijst.</p><label>Route</label><select id="deliveryRoute"><option>Loop route</option><option>Fiets route</option></select><div class="actions"><button class="green" onclick="beginSelected()">▶ Start bezorgen</button></div></section><section class="card"><h3>Adressen in gekozen route</h3><div id="deliveryPreview"></div></section>`;el('deliveryRoute').value=activeRoute;updatePreview();el('deliveryRoute').addEventListener('change',updatePreview)}
+function updatePreview(){let r=el('deliveryRoute').value;activeRoute=r;el('deliveryPreview').innerHTML=addressList(r)}
+window.beginSelected=()=>{activeRoute=el('deliveryRoute').value;startDelivery()}
+function donePage(){el('app').innerHTML=`<section class="card"><h2>Voltooide bezorgrondes</h2><p class="muted">Hier kun je eerdere rondes terugkijken.</p>${db.history.length?db.history.map((h,i)=>`<div class="address"><div class="adr"><div>${esc(h.title)}</div><div class="sub">${esc(h.route)} · ${h.items.length} adressen</div></div><button onclick="viewRound(${i})">Bekijken</button><button class="danger" onclick="deleteRound(${i})">✕</button></div>`).join(''):'<div class="empty">Nog geen bezorgrondes opgeslagen.</div>'}</section>`}
+window.viewRound=i=>{let h=db.history[i];showModal(`<h2>${esc(h.title)}</h2><p class="muted">${esc(h.route)} · ${h.items.length} adressen</p>${h.items.map((a,i)=>`<div class="address"><div class="adr ${a.color==='Blauw'?'blue':'black'}">${i+1}. ${esc(a.street)} ${esc(a.number)}</div></div>`).join('')}<button class="secondary" onclick="closeModal()">Sluiten</button>`)}
+window.deleteRound=i=>{if(confirm('Deze opgeslagen ronde verwijderen?')){db.history.splice(i,1);save();render()}}
+function settingsPage(){el('app').innerHTML=`<section class="card"><h2>Beheer</h2><p>Ingelogd als <b>${esc(currentUser)}</b></p><div class="actions"><button onclick="manageUsers()">Personen en pincodes beheren</button><button class="secondary" onclick="editStreets()">14 straten instellen</button><button class="secondary" onclick="logout()">Uitloggen</button></div></section><section class="card"><h3>Belangrijk</h3><p class="muted">De gegevens staan op deze telefoon in deze browser. Wis de browsergegevens niet en maak regelmatig een back-up als je je gegevens wilt bewaren.</p><button class="danger" onclick="exportBackup()">Download back-up</button><label>Back-up terugzetten</label><input id="backupFile" type="file" accept="application/json"><button class="secondary" onclick="importBackup()">Back-up importeren</button></section>`}
+window.logout=()=>{currentUser=null;run=null;render()}
+function requireAdmin(){let p=prompt('Voer de 4-cijferige hoofd-pincode in:');if(p===null)return false;if(p!==db.adminPin){alert('Onjuiste hoofd-pincode.');return false}return true}
+window.manageUsers=()=>{if(!requireAdmin())return;let list=db.users.map((u,i)=>`<div class="address"><div class="adr">${esc(u.name)}${u.admin?' (hoofdaccount)':''}</div>${u.admin?'<span class="muted">Hoofdaccount</span>':`<button class="danger" onclick="removeUser(${i})">Verwijderen</button>`}</div>`).join('');showModal(`<h2>Personen en pincodes beheren</h2>${list}<h3>Persoon toevoegen</h3><label>Naam</label><input id="newName" placeholder="Naam"><label>4-cijferige pincode</label><input id="newPin" inputmode="numeric" maxlength="4" type="password" placeholder="4 cijfers"><div class="actions"><button onclick="addUser()">Persoon toevoegen</button><button class="secondary" onclick="changeAdminPin()">Hoofdpincode wijzigen</button><button class="secondary" onclick="closeModal()">Sluiten</button></div>`)}
+window.addUser=()=>{let name=el('newName').value.trim(),pin=el('newPin').value;if(!name||!/^\d{4}$/.test(pin)){alert('Vul een naam en precies 4 cijfers in.');return}if(db.users.some(u=>u.name.toLowerCase()===name.toLowerCase())){alert('Deze naam bestaat al.');return}db.users.push({name,pin,admin:false});save();manageUsers()}
+window.removeUser=i=>{if(!requireAdmin())return;if(db.users[i].admin)return;db.users.splice(i,1);save();manageUsers()}
+window.changeAdminPin=()=>{if(!requireAdmin())return;let p=prompt('Nieuwe hoofd-pincode (4 cijfers):');if(p===null)return;if(!/^\d{4}$/.test(p)){alert('Gebruik precies 4 cijfers.');return}db.adminPin=p;let a=db.users.find(u=>u.admin);if(a)a.pin=p;save();alert('Hoofdpincode gewijzigd.');manageUsers()}
+window.editStreets=()=>{if(!requireAdmin())return;showModal(`<h2>14 straten instellen</h2><p class="muted">Vervang Straat 1 t/m 14 door de echte straatnamen. Adressen die al zijn toegevoegd behouden hun opgeslagen straatnaam.</p>${db.streets.map((s,i)=>`<label>Straat ${i+1}</label><input id="street${i}" value="${esc(s)}">`).join('')}<div class="actions"><button onclick="saveStreets()">Opslaan</button><button class="secondary" onclick="closeModal()">Annuleren</button></div>`)}
+window.saveStreets=()=>{let s=db.streets.map((_,i)=>el('street'+i).value.trim());if(s.some(x=>!x)){alert('Vul alle 14 straatnamen in.');return}db.streets=s;save();closeModal();render()}
+function exportBackup(){let blob=new Blob([JSON.stringify(db,null,2)],{type:'application/json'}),url=URL.createObjectURL(blob),a=document.createElement('a');a.href=url;a.download='folders-app-backup.json';a.click();URL.revokeObjectURL(url)}
+window.exportBackup=exportBackup;
+window.importBackup=()=>{let f=el('backupFile').files[0];if(!f){alert('Kies eerst een back-upbestand.');return}let reader=new FileReader();reader.onload=()=>{try{let d=JSON.parse(reader.result);if(!d.users||!d.routes||!d.streets||!d.history)throw 0;if(confirm('De huidige gegevens vervangen door deze back-up?')){db=d;save();alert('Back-up teruggezet.');render()}}catch(e){alert('Dit bestand lijkt geen geldige Folders APP-back-up.')}};reader.readAsText(f)}
+function showModal(content){el('modalroot').innerHTML=`<div class="modal" id="modal"><div class="modalbox">${content}</div></div>`}
+function closeModal(){el('modalroot').innerHTML=''}
+window.closeModal=closeModal;
+render();
+})();
+</script>
+</body>
+</html>
